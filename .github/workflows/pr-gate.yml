@@ -1,5 +1,4 @@
 # This repo runs its own gate at the stable v1 tag, so changes to the gate are gated too.
-# Copy to .github/workflows/pr-gate.yml in the repository you want to gate.
 name: pr-gate
 on:
   pull_request:
