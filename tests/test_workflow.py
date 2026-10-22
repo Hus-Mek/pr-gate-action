@@ -119,11 +119,15 @@ class CallerPermissionsTest(unittest.TestCase):
                 have = PERMISSION_RANK[granted.get(scope, "none")]
                 self.assertGreaterEqual(have, PERMISSION_RANK[level], f"{name}: {scope}: {level}")
 
-    def test_example_caller_uses_the_reusable_workflow_and_inherits_secrets(self):
+    def test_example_caller_uses_the_reusable_workflow_and_passes_secrets_by_name(self):
+        # `secrets: inherit` stops at the owner boundary, so a caller in another owner would run
+        # the gate with empty secrets and the review would skip while reporting pass.
         text = CALLER.read_text(encoding="utf-8")
 
         self.assertIn("uses: Hus-Mek/pr-gate-action/.github/workflows/gate.yml@v1", text)
-        self.assertIn("secrets: inherit", text)
+        self.assertNotIn("secrets: inherit", text)
+        for name in ("CLAUDE_CODE_OAUTH_TOKEN", "PR_GATE_PUSH_TOKEN"):
+            self.assertIn(f"{name}: ${{{{ secrets.{name} }}}}", text)
         self.assertRegex(text, r"(?m)^concurrency:")
 
 

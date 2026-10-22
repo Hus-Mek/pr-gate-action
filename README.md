@@ -69,7 +69,9 @@ jobs:
     uses: Hus-Mek/pr-gate-action/.github/workflows/gate.yml@v1
     with:
       gate_ref: v1
-    secrets: inherit
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      PR_GATE_PUSH_TOKEN: ${{ secrets.PR_GATE_PUSH_TOKEN }}
 ```
 
 - Keep `gate_ref` equal to the ref in `uses:`. The workflow file comes from `uses:`, and the
@@ -78,6 +80,9 @@ jobs:
   grants, and the gate's jobs ask for `pull-requests: write`, `issues: write` and
   `id-token: write`.
 - The workflow defines no concurrency group of its own; the caller's group cancels stale runs.
+- Pass the secrets by name, not with `secrets: inherit`. GitHub only inherits secrets into a
+  reusable workflow in the same organization or enterprise, so a caller in another owner gets
+  empty secrets: the AI review and fix loop skip, and the `review` check still passes.
 
 ### Check names for branch protection
 
