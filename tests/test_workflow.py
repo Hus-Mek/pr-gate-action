@@ -106,6 +106,28 @@ class ReusableWorkflowTest(unittest.TestCase):
             self.assertNotIn("&& ref=FETCH_HEAD", body, name)
 
 
+class FixJobTest(unittest.TestCase):
+    def setUp(self):
+        self.fix = jobs(WORKFLOW.read_text(encoding="utf-8"))["fix"]
+
+    def test_installs_the_repos_dependencies_before_the_agent_runs(self):
+        # Without them the agent cannot run the tests it is told to make pass, and gives up.
+        self.assertLess(self.fix.index("uv sync --frozen"), self.fix.index(AGENT))
+
+    def test_agent_may_run_the_tests_through_uv(self):
+        self.assertIn("Bash(uv run pytest:*)", self.fix)
+        self.assertIn("Bash(uv run python -m pytest:*)", self.fix)
+
+    def test_agent_authors_the_fix_itself(self):
+        # A repo's agent instructions may say to delegate code to a lane; none exists in CI.
+        self.assertIn("even if the repo's agent instructions", self.fix)
+
+    def test_a_refused_fix_keeps_the_agent_log(self):
+        self.assertIn('echo "refused=true" >> "$GITHUB_OUTPUT"', self.fix)
+        upload = self.fix.index("if: steps.verify.outputs.refused == 'true'")
+        self.assertIn("steps.claude.outputs.execution_file", self.fix[upload:])
+
+
 class CallerPermissionsTest(unittest.TestCase):
     def test_every_job_asks_for_no_more_than_the_example_caller_grants(self):
         # A called workflow's jobs cannot exceed the caller's GITHUB_TOKEN permissions.
