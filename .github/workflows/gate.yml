@@ -209,9 +209,35 @@ jobs:
       - name: Remove any findings.json the PR itself carries
         if: steps.token.outputs.present == 'true'
         run: rm -f findings.json
+      - name: Install Bun (pinned hash; npm registry, then GitHub release)
+        id: bun
+        if: steps.token.outputs.present == 'true'
+        env:
+          # Must match the bun-version pinned inside the claude-code-action release used below.
+          BUN_VERSION: "1.3.14"
+          BUN_SHA256: 9fd36f87e4b90b07632b987a2e4ec81ca15a62c81bf983190cea6d715be2ad74
+        run: |
+          dir="$RUNNER_TEMP/bun"
+          mkdir -p "$dir"
+          get() { curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 20 -o "$2" "$1"; }
+          ok() { [ -f "$1" ] && echo "$BUN_SHA256  $1" | sha256sum -c --status; }
+          npm_url="https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-$BUN_VERSION.tgz"
+          gh_url="https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/bun-linux-x64.zip"
+          bin="$dir/package/bin/bun"
+          if ! { get "$npm_url" "$dir/bun.tgz" && tar -xzf "$dir/bun.tgz" -C "$dir" && ok "$bin"; }; then
+            echo "::warning::The npm registry copy of Bun failed to download or verify; trying the GitHub release"
+            bin="$dir/bun-linux-x64/bun"
+            if ! { get "$gh_url" "$dir/bun.zip" && unzip -q -o "$dir/bun.zip" -d "$dir" && ok "$bin"; }; then
+              echo "::error::Could not get a verified Bun $BUN_VERSION from the npm registry or GitHub"; exit 1
+            fi
+          fi
+          chmod +x "$bin"
+          "$bin" --version
+          echo "path=$bin" >> "$GITHUB_OUTPUT"
       - uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         if: steps.token.outputs.present == 'true'
         with:
+          path_to_bun_executable: ${{ steps.bun.outputs.path }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           prompt: |
@@ -291,9 +317,35 @@ jobs:
         if: steps.token.outputs.present == 'true'
         with:
           fetch-depth: 1
+      - name: Install Bun (pinned hash; npm registry, then GitHub release)
+        id: bun
+        if: steps.token.outputs.present == 'true' && env.TIER != '3'
+        env:
+          # Must match the bun-version pinned inside the claude-code-action release used below.
+          BUN_VERSION: "1.3.14"
+          BUN_SHA256: 9fd36f87e4b90b07632b987a2e4ec81ca15a62c81bf983190cea6d715be2ad74
+        run: |
+          dir="$RUNNER_TEMP/bun"
+          mkdir -p "$dir"
+          get() { curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 20 -o "$2" "$1"; }
+          ok() { [ -f "$1" ] && echo "$BUN_SHA256  $1" | sha256sum -c --status; }
+          npm_url="https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-$BUN_VERSION.tgz"
+          gh_url="https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/bun-linux-x64.zip"
+          bin="$dir/package/bin/bun"
+          if ! { get "$npm_url" "$dir/bun.tgz" && tar -xzf "$dir/bun.tgz" -C "$dir" && ok "$bin"; }; then
+            echo "::warning::The npm registry copy of Bun failed to download or verify; trying the GitHub release"
+            bin="$dir/bun-linux-x64/bun"
+            if ! { get "$gh_url" "$dir/bun.zip" && unzip -q -o "$dir/bun.zip" -d "$dir" && ok "$bin"; }; then
+              echo "::error::Could not get a verified Bun $BUN_VERSION from the npm registry or GitHub"; exit 1
+            fi
+          fi
+          chmod +x "$bin"
+          "$bin" --version
+          echo "path=$bin" >> "$GITHUB_OUTPUT"
       - uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         if: steps.token.outputs.present == 'true' && env.TIER != '3'
         with:
+          path_to_bun_executable: ${{ steps.bun.outputs.path }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           prompt: |
@@ -584,11 +636,37 @@ jobs:
           else
             echo "::notice::No uv.lock or package-lock.json; the agent runs without installed dependencies"
           fi
+      - name: Install Bun (pinned hash; npm registry, then GitHub release)
+        id: bun
+        if: steps.findings.outputs.ready == 'true'
+        env:
+          # Must match the bun-version pinned inside the claude-code-action release used below.
+          BUN_VERSION: "1.3.14"
+          BUN_SHA256: 9fd36f87e4b90b07632b987a2e4ec81ca15a62c81bf983190cea6d715be2ad74
+        run: |
+          dir="$RUNNER_TEMP/bun"
+          mkdir -p "$dir"
+          get() { curl -fsSL --retry 4 --retry-all-errors --retry-delay 5 --connect-timeout 20 -o "$2" "$1"; }
+          ok() { [ -f "$1" ] && echo "$BUN_SHA256  $1" | sha256sum -c --status; }
+          npm_url="https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-$BUN_VERSION.tgz"
+          gh_url="https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/bun-linux-x64.zip"
+          bin="$dir/package/bin/bun"
+          if ! { get "$npm_url" "$dir/bun.tgz" && tar -xzf "$dir/bun.tgz" -C "$dir" && ok "$bin"; }; then
+            echo "::warning::The npm registry copy of Bun failed to download or verify; trying the GitHub release"
+            bin="$dir/bun-linux-x64/bun"
+            if ! { get "$gh_url" "$dir/bun.zip" && unzip -q -o "$dir/bun.zip" -d "$dir" && ok "$bin"; }; then
+              echo "::error::Could not get a verified Bun $BUN_VERSION from the npm registry or GitHub"; exit 1
+            fi
+          fi
+          chmod +x "$bin"
+          "$bin" --version
+          echo "path=$bin" >> "$GITHUB_OUTPUT"
       - uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6 # v1.0.253
         id: claude
         if: steps.findings.outputs.ready == 'true'
         continue-on-error: true
         with:
+          path_to_bun_executable: ${{ steps.bun.outputs.path }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
           prompt: |

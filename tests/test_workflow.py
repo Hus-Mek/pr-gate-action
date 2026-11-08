@@ -128,6 +128,33 @@ class FixJobTest(unittest.TestCase):
         self.assertIn("steps.claude.outputs.execution_file", self.fix[upload:])
 
 
+class BunInstallTest(unittest.TestCase):
+    # The agent action installs Bun from one GitHub release URL with no retry; a 504 there failed
+    # every review on 2026-11-08. The gate installs Bun itself and hands the action the binary.
+    def setUp(self):
+        self.agent_jobs = {n: b for n, b in jobs(WORKFLOW.read_text(encoding="utf-8")).items() if AGENT in b}
+
+    def test_every_agent_job_installs_bun_before_the_agent(self):
+        self.assertTrue(self.agent_jobs)
+        for name, body in self.agent_jobs.items():
+            self.assertIn("id: bun\n", body, name)
+            self.assertLess(body.index("id: bun\n"), body.index(AGENT), name)
+
+    def test_every_agent_step_uses_the_installed_bun(self):
+        for name, body in self.agent_jobs.items():
+            agent_steps = body.split(AGENT)[1:]
+            for step in agent_steps:
+                self.assertIn("path_to_bun_executable: ${{ steps.bun.outputs.path }}", step.split("\n      - ")[0], name)
+
+    def test_install_retries_two_sources_and_runs_only_a_verified_binary(self):
+        for name, body in self.agent_jobs.items():
+            self.assertIn("--retry-all-errors", body, name)
+            self.assertIn("https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-", body, name)
+            self.assertIn("https://github.com/oven-sh/bun/releases/download/", body, name)
+            self.assertRegex(body, r"BUN_SHA256: [0-9a-f]{64}\n", name)
+            self.assertIn('sha256sum -c --status', body, name)
+
+
 class CallerPermissionsTest(unittest.TestCase):
     def test_every_job_asks_for_no_more_than_the_example_caller_grants(self):
         # A called workflow's jobs cannot exceed the caller's GITHUB_TOKEN permissions.
