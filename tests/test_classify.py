@@ -43,6 +43,17 @@ class ClassifyTest(unittest.TestCase):
 
         self.assertEqual(result.tier, 0)
 
+    def test_large_test_only_change_is_t1_so_the_review_runs(self):
+        result = classify((change("tests/test_x.py", 151, 0),), frozenset(), DEFAULT_POLICY)
+
+        self.assertEqual(result.tier, 1)
+        self.assertIn("151 added test lines exceed the T0 cap of 150", result.reasons[0])
+
+    def test_deleted_test_lines_and_docs_do_not_count_toward_the_t0_cap(self):
+        changes = (change("tests/test_x.py", 150, 400), change("README.md", 500))
+
+        self.assertEqual(classify(changes, frozenset(), DEFAULT_POLICY).tier, 0)
+
     def test_empty_diff_is_flagged_not_called_docs_only(self):
         # A re-merged, already-landed branch diffs empty against base; the gate must fail it.
         result = classify((), frozenset(), DEFAULT_POLICY)
@@ -196,6 +207,8 @@ class OlderPolicyTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(policy.max_lines, 400)
         self.assertIn("*.lock", policy.size_excluded)
+        self.assertEqual(policy.max_t0_test_lines, 150)
+        self.assertIn("tests/*", policy.tests)
 
 
 class RenderSizeTest(unittest.TestCase):
@@ -203,6 +216,13 @@ class RenderSizeTest(unittest.TestCase):
         result = classify((change("src/app.py", 40, 5),), frozenset(), DEFAULT_POLICY)
 
         self.assertIn("45 counted lines (hard cap 400)", render_markdown(result))
+
+    def test_reports_test_lines_added_and_deleted(self):
+        changes = (change("src/app.py", 40, 5), change("tests/test_app.py", 30, 12))
+
+        body = render_markdown(classify(changes, frozenset(), DEFAULT_POLICY))
+
+        self.assertIn("Tests: +30/-12 lines", body)
 
     def test_renders_marker_tier_action_and_reasons(self):
         result = classify((change("src/auth/login.py"),), frozenset(), DEFAULT_POLICY)

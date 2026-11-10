@@ -22,6 +22,8 @@ DEFAULT_SIZE_EXCLUDED = (
     "*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum",
     "*.min.js", "*.min.css", "*.snap", "*.map",
 )
+DEFAULT_MAX_T0_TEST_LINES = 150
+DEFAULT_TEST_PATHS = ("tests/*", "*/tests/*", "test_*.py", "*_test.py", "*.test.ts", "*.spec.ts")
 TIER_ACTIONS = {
     0: "auto-merge when CI is green",
     1: "AI review; may merge when the gate is green",
@@ -47,6 +49,8 @@ class Policy:
     dependency: tuple[str, ...]
     critical: tuple[str, ...]
     size_excluded: tuple[str, ...]
+    max_t0_test_lines: int
+    tests: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,8 @@ class Classification:
     empty: bool = False
     lines: int = 0
     over_cap: bool = False
+    test_added: int = 0
+    test_deleted: int = 0
 
 
 def load_policy(path: Path) -> Policy:
@@ -70,6 +76,8 @@ def load_policy(path: Path) -> Policy:
         dependency=tuple(paths["dependency"]),
         critical=tuple(paths["critical"]),
         size_excluded=tuple(paths.get("size_excluded", DEFAULT_SIZE_EXCLUDED)),
+        max_t0_test_lines=raw["size"].get("max_t0_test_lines", DEFAULT_MAX_T0_TEST_LINES),
+        tests=tuple(paths.get("tests", DEFAULT_TEST_PATHS)),
     )
 
 
@@ -103,7 +111,14 @@ def classify(
     source = [c for c in changes if not matches(c.path, policy.trivial)]
     lines = counted_lines(source, policy, generated)
     over_cap = lines > policy.max_lines
+    tests = [c for c in changes if matches(c.path, policy.tests)]
+    test_added, test_deleted = sum(c.added for c in tests), sum(c.deleted for c in tests)
     rules = (
+        # Tests are excluded from the size cap, so a test-only PR would otherwise merge unreviewed
+        # at any size. Deleted lines are free: consolidating a suite should stay T0.
+        (1, not source and test_added > policy.max_t0_test_lines,
+         (f"{test_added} added test lines exceed the T0 cap of {policy.max_t0_test_lines};"
+          " the AI review checks test hygiene")),
         (2, lines > policy.max_t1_lines, f"{lines} changed lines exceed the T1 cap of {policy.max_t1_lines}"),
         (2, over_cap, (f"{lines} changed lines exceed the hard cap of {policy.max_lines}; split the PR"
                        " (a maintainer can add the size-exception label for a one-off)")),
@@ -115,7 +130,8 @@ def classify(
     base = 1 if source else 0
     reasons = [r for _, r in fired] or [("source change within T1 limits" if base else "docs/tests only")]
     tier = max([base, *(t for t, _ in fired)])
-    return Classification(tier, tuple(reasons), lines=lines, over_cap=over_cap)
+    return Classification(tier, tuple(reasons), lines=lines, over_cap=over_cap,
+                          test_added=test_added, test_deleted=test_deleted)
 
 
 def counted_lines(source: list[Change], policy: Policy, generated: frozenset[str]) -> int:
@@ -135,7 +151,9 @@ def _reason(text: str, hit: bool | list[str]) -> str:
 def render_markdown(result: Classification, policy: Policy = DEFAULT_POLICY) -> str:
     reasons = "\n".join(f"- {r}" for r in result.reasons)
     size = f"Size: {result.lines} counted lines (hard cap {policy.max_lines})"
-    return f"{COMMENT_MARKER}\n### pr-gate: **T{result.tier}**, {TIER_ACTIONS[result.tier]}\n\n{reasons}\n\n{size}\n"
+    tests = f"Tests: +{result.test_added}/-{result.test_deleted} lines (not counted in size)"
+    return (f"{COMMENT_MARKER}\n### pr-gate: **T{result.tier}**, {TIER_ACTIONS[result.tier]}\n\n"
+            f"{reasons}\n\n{size}\n{tests}\n")
 
 
 def git(*args: str) -> str:
