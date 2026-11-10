@@ -117,8 +117,8 @@ def classify(
         # Tests are excluded from the size cap, so a test-only PR would otherwise merge unreviewed
         # at any size. Deleted lines are free: consolidating a suite should stay T0.
         (1, not source and test_added > policy.max_t0_test_lines,
-         f"{test_added} added test lines exceed the T0 cap of {policy.max_t0_test_lines};"
-         " the AI review checks test hygiene"),
+         (f"{test_added} added test lines exceed the T0 cap of {policy.max_t0_test_lines};"
+          " the AI review checks test hygiene")),
         (2, lines > policy.max_t1_lines, f"{lines} changed lines exceed the T1 cap of {policy.max_t1_lines}"),
         (2, over_cap, (f"{lines} changed lines exceed the hard cap of {policy.max_lines}; split the PR"
                        " (a maintainer can add the size-exception label for a one-off)")),
