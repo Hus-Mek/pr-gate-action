@@ -11,6 +11,9 @@
 max_t1_lines = 150
 # Hard cap: the size check fails above this unless a maintainer adds the size-exception label.
 max_lines = 400
+# Test lines are not counted above. A tests-only PR adding more than this many test lines is T1,
+# so the AI review runs instead of an unreviewed auto-merge. Deleted test lines never count.
+max_t0_test_lines = 150
 
 [hotspot]
 # A file touched by at least this many fix/revert commits in the window is T2.
@@ -33,6 +36,8 @@ size_excluded = [
   "*.lock", "package-lock.json", "pnpm-lock.yaml", "go.sum",
   "*.min.js", "*.min.css", "*.snap", "*.map",
 ]
+# Test files, for max_t0_test_lines and the Tests line of the gate comment (a subset of trivial).
+tests = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "*.test.ts", "*.spec.ts"]
 critical = [
   ".github/*", "risk-policy.toml", ".gitattributes",
   "auth/*", "*/auth/*", "*secret*", ".env*",
