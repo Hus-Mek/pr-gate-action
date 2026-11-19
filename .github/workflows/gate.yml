@@ -245,21 +245,36 @@ jobs:
             PR NUMBER: ${{ github.event.pull_request.number }}
             RISK TIER: T3 (independent review pass ${{ matrix.pass }} of 2)
 
-            Review this pull request for correctness bugs and security problems only.
+            Review this pull request for correctness bugs, security problems, and bad fixes or
+            bad practice measured against this codebase (step 4).
 
             1. Read the diff with `gh pr diff`. List every candidate problem.
-            2. Verify each candidate by reading the surrounding code in the checkout. Drop it if you
+            2. Learn how this codebase already does it before you judge. Read every changed file in
+               full, not only the hunk. Grep for the callers of each function the diff changes, and
+               for an existing helper that already does what new code does. Read one neighbouring
+               file that solves the same kind of problem. The code in the checkout is the standard:
+               a written convention counts only where the code follows it.
+            3. Verify each candidate against what you read. Drop it if you
                cannot point to the exact input or state that breaks, if it already existed before
                this PR, if a linter or type checker would catch it, or if it is style or naming.
-            3. Do not post anything to GitHub. Write the surviving findings with the Write tool to
+            4. Bad fixes and bad practice, only what you confirm in the checkout:
+               a fix that hides the symptom and leaves the cause (a special case for the failing
+               input, an error caught and dropped, a retry or sleep around a race, a default that
+               masks missing data, a test or assertion weakened, skipped or deleted); a fix at one
+               caller while other callers still reach the same bug; new code that duplicates an
+               existing helper; new code that does a job differently from the neighbouring code
+               with no reason in the diff. A fix that leaves the bug reachable is blocking and
+               states the input that still fails. The rest are non-blocking and cite the existing
+               code as `path:line`.
+            5. Do not post anything to GitHub. Write the surviving findings with the Write tool to
                `findings.json` in the current working directory, as a JSON list of objects:
                {"path": "<file path relative to the repo root>", "line": <line number in the new
                version of the file, on a line the diff adds or changes>, "severity": "blocking" or
                "non-blocking", "body": "<comment>"}.
                Each body starts with a Conventional Comments label that matches the severity,
                `issue (blocking):` or `suggestion (non-blocking):`, then states the failing input
-               and the consequence in two sentences or fewer.
-            4. Always write the file. When nothing survived, write `[]`.
+               and the consequence, or the existing code to follow, in two sentences or fewer.
+            6. Always write the file. When nothing survived, write `[]`.
 
             Silence beats noise: include nothing you have not verified.
           claude_args: |
@@ -353,31 +368,46 @@ jobs:
             PR NUMBER: ${{ github.event.pull_request.number }}
             RISK TIER: T${{ needs.classify.outputs.tier }}
 
-            Review this pull request for correctness bugs and security problems. If it adds test
-            code, also check test hygiene (step 3).
+            Review this pull request for correctness bugs, security problems, and bad fixes or
+            bad practice measured against this codebase (step 4). If it adds test code, also check
+            test hygiene (step 5).
 
             1. Read the diff with `gh pr diff`. List every candidate problem.
-            2. Verify each candidate by reading the surrounding code in the checkout. Drop it if you
+            2. Learn how this codebase already does it before you judge. Read every changed file in
+               full, not only the hunk. Grep for the callers of each function the diff changes, and
+               for an existing helper that already does what new code does. Read one neighbouring
+               file that solves the same kind of problem. The code in the checkout is the standard:
+               a written convention counts only where the code follows it.
+            3. Verify each candidate against what you read. Drop it if you
                cannot point to the exact input or state that breaks, if it already existed before
                this PR, if a linter or type checker would catch it, or if it is style or naming.
-            3. Test hygiene, only for test code this PR adds, and only what you confirm with Grep in
+            4. Bad fixes and bad practice, only what you confirm in the checkout:
+               a fix that hides the symptom and leaves the cause (a special case for the failing
+               input, an error caught and dropped, a retry or sleep around a race, a default that
+               masks missing data, a test or assertion weakened, skipped or deleted); a fix at one
+               caller while other callers still reach the same bug; new code that duplicates an
+               existing helper; new code that does a job differently from the neighbouring code
+               with no reason in the diff. A fix that leaves the bug reachable is blocking and
+               states the input that still fails. The rest are non-blocking and cite the existing
+               code as `path:line`.
+            5. Test hygiene, only for test code this PR adds, and only what you confirm with Grep in
                the checkout: a helper or fixture copied from another test file instead of shared
                through conftest.py or a factory module; a new test file where an existing one already
                tests the same module; tests that differ only in data and belong in one parametrized
                test; tests this change made obsolete but left in place. These are never blocking.
-            4. Post each surviving finding as an inline comment with
+            6. Post each surviving finding as an inline comment with
                `mcp__github_inline_comment__create_inline_comment` (confirmed: true), prefixed with a
                Conventional Comments label: `issue (blocking):` or `suggestion (non-blocking):`.
                Test-hygiene findings always use `suggestion (non-blocking):` and name the existing
                file or helper to reuse. Other comments state the failing input and the consequence in
                two sentences or fewer.
-            5. Finish with one top-level `gh pr comment` that starts with "pr-gate review:" and gives
+            7. Finish with one top-level `gh pr comment` that starts with "pr-gate review:" and gives
                the count of findings, or "pr-gate review: no confirmed issues" when none survived.
 
             Silence beats noise: post nothing you have not verified. Do not approve or request changes.
           claude_args: |
             --model ${{ env.TIER == '2' && 'claude-opus-5-5' || 'claude-sonnet-5-5' }}
-            --max-turns 40
+            --max-turns 60
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
       - name: Require both T3 review passes
         if: steps.token.outputs.present == 'true' && env.TIER == '3' && needs.review-pass.result != 'success'

@@ -24,6 +24,13 @@ loop pushes a verified fix for blocking findings. Python 3.11+ standard library 
 - **T3**: a critical path such as `.github/`, auth, secrets, migrations or deploy files. Two
   independent passes and the agreement filter.
 
+**What a review looks for.** Correctness bugs, security problems, and bad fixes or bad practice
+measured against the repository's own code. Before judging, the reviewer reads each changed file
+in full, finds the callers of changed functions, and looks for an existing helper and a
+neighbouring file that solves the same kind of problem. A fix that leaves the bug reachable is
+blocking. Duplicated helpers and code that departs from its neighbours are non-blocking and cite
+the existing code. Style, naming and anything a linter catches are left out.
+
 **Size cap.** Lines added plus deleted in non-trivial files count toward size. Lockfiles,
 minified assets, snapshots, source maps and files marked `linguist-generated` in the base branch's
 `.gitattributes` do not. Above the hard cap (400 by default) `classify` fails, unless the PR has
